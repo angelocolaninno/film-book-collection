@@ -831,6 +831,11 @@ button {
   color: #868880;
   font-size: 11px;
 }
+.manual-entry-button {
+  display: block;
+  margin: 17px auto 0;
+  padding: 10px 12px;
+}
 .modal-entry {
   width: min(100% - 28px, 510px);
 }

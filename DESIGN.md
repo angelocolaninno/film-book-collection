@@ -32,7 +32,7 @@ The collection is the home screen. Keep filters and collection search visually s
 ## Components
 
 - **Collection card:** Artwork first; title and one restrained line below.
-- **Add flow:** Choose film or book, then enter the title and any details or artwork URL by hand. The current version makes no metadata-provider requests.
+- **Add flow:** Choose film or book, search the matching metadata provider, or enter details and an artwork URL by hand if search is unavailable.
 - **Detail sheet:** Large title and artwork; date/context; notes; compact structured metadata.
 - **Primary button:** Garden green pill with clear text and a generous touch target.
 - **Search field:** Quiet outline or underline, with a visible focus treatment.

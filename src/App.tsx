@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { ChangeEvent, FormEvent } from "react";
 import { collectionRepository } from "./repository";
-import type { CollectionItem, MediaKind } from "./types";
+import { getBookDetails, getFilmCredits, searchMedia } from "./metadata";
+import type { CollectionItem, MediaKind, SearchResult } from "./types";
 
 const today = () => {
   const date = new Date();
@@ -37,10 +38,16 @@ function App() {
   const [editor, setEditor] = useState<CollectionItem | null>(null);
   const [addOpen, setAddOpen] = useState(false);
   const [addingKind, setAddingKind] = useState<MediaKind | null>(null);
-  const [step, setStep] = useState<"choose" | "entry">("choose");
+  const [searchQuery, setSearchQuery] = useState("");
+  const [searchedQuery, setSearchedQuery] = useState("");
+  const [results, setResults] = useState<SearchResult[]>([]);
+  const [searching, setSearching] = useState(false);
+  const [step, setStep] = useState<"choose" | "search" | "entry">("choose");
   const [error, setError] = useState("");
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [toast, setToast] = useState("");
+  const searchInput = useRef<HTMLInputElement>(null);
+  const searchRun = useRef(0);
   const collectionSearchInput = useRef<HTMLInputElement>(null);
   const fileInput = useRef<HTMLInputElement>(null);
 
@@ -56,6 +63,9 @@ function App() {
   useEffect(() => {
     void refresh();
   }, []);
+  useEffect(() => {
+    if (step === "search") searchInput.current?.focus();
+  }, [step, addingKind]);
   useEffect(() => {
     if (!toast) return;
     const timer = window.setTimeout(() => setToast(""), 2600);
@@ -101,25 +111,90 @@ function App() {
   );
 
   const closeAdd = () => {
+    searchRun.current += 1;
+    setSearching(false);
     setAddOpen(false);
     setAddingKind(null);
     setStep("choose");
     setEditor(null);
+    setResults([]);
+    setSearchQuery("");
+    setSearchedQuery("");
     setError("");
   };
   const beginAdd = () => {
+    searchRun.current += 1;
+    setSearching(false);
     setAddOpen(true);
     setAddingKind(null);
     setStep("choose");
     setEditor(null);
+    setResults([]);
+    setSearchQuery("");
+    setSearchedQuery("");
     setError("");
   };
   const chooseKind = (kind: MediaKind) => {
+    searchRun.current += 1;
+    setSearching(false);
+    setSearchQuery("");
+    setSearchedQuery("");
+    setResults([]);
     setError("");
     setAddingKind(kind);
-    const item = empty(kind);
+    setStep("search");
+  };
+  const startManualEntry = () => {
+    if (!addingKind) return;
+    setError("");
+    setEditor(empty(addingKind));
+    setStep("entry");
+  };
+  const runSearch = async (event: FormEvent) => {
+    event.preventDefault();
+    if (!addingKind || searchQuery.trim().length < 2) return;
+    const requestId = ++searchRun.current;
+    const term = searchQuery.trim();
+    setSearchedQuery(term);
+    setSearching(true);
+    setError("");
+    setResults([]);
+    try {
+      const matches = await searchMedia(addingKind, term);
+      if (requestId === searchRun.current) setResults(matches);
+    } catch {
+      if (requestId === searchRun.current)
+        setError("Search isn’t available right now.");
+    } finally {
+      if (requestId === searchRun.current) setSearching(false);
+    }
+  };
+  const chooseResult = async (result: SearchResult) => {
+    if (!addingKind) return;
+    const item: CollectionItem = {
+      ...empty(addingKind),
+      title: result.title,
+      originalTitle: addingKind === "film" ? result.subtitle : undefined,
+      subtitle: addingKind === "book" ? result.subtitle : undefined,
+      authors: result.authors,
+      year: result.year,
+      image: result.image,
+      externalId: result.id,
+    };
     setEditor(item);
     setStep("entry");
+    setError("");
+    try {
+      const details =
+        addingKind === "film"
+          ? await getFilmCredits(result.id)
+          : await getBookDetails(result.id);
+      setEditor((current) =>
+        current?.id === item.id ? { ...current, ...details } : current,
+      );
+    } catch {
+      /* Search metadata remains useful if detail credits are unavailable. */
+    }
   };
   const saveItem = async (event: FormEvent) => {
     event.preventDefault();
@@ -584,16 +659,125 @@ function App() {
                 </div>
               </>
             )}
+            {step === "search" && addingKind && (
+              <>
+                <button
+                  className="back-link"
+                  onClick={() => {
+                    searchRun.current += 1;
+                    setSearching(false);
+                    setSearchQuery("");
+                    setSearchedQuery("");
+                    setResults([]);
+                    setStep("choose");
+                    setAddingKind(null);
+                    setError("");
+                  }}
+                >
+                  ← Back
+                </button>
+                <p className="eyebrow">
+                  A NEW {addingKind === "film" ? "FILM" : "BOOK"}
+                </p>
+                <h2 id="modal-title">
+                  {addingKind === "film"
+                    ? "What did you watch?"
+                    : "What did you read?"}
+                </h2>
+                <p className="modal-lede">
+                  Search by title, or add the details yourself.
+                </p>
+                <form className="metadata-search" onSubmit={runSearch}>
+                  <SearchIcon />
+                  <input
+                    ref={searchInput}
+                    placeholder={
+                      addingKind === "film"
+                        ? "Search for a film…"
+                        : "Search for a book…"
+                    }
+                    value={searchQuery}
+                    onChange={(event) => {
+                      searchRun.current += 1;
+                      setSearching(false);
+                      setSearchQuery(event.target.value);
+                      setSearchedQuery("");
+                      setResults([]);
+                      setError("");
+                    }}
+                  />
+                  <button
+                    className="button button-dark"
+                    disabled={searching || searchQuery.trim().length < 2}
+                  >
+                    {searching ? "Searching…" : "Search"}
+                  </button>
+                </form>
+                {error && (
+                  <p className="inline-error" role="alert">
+                    {error} You can still add it manually.
+                  </p>
+                )}
+                {results.length > 0 && (
+                  <div className="search-results" aria-label="Search results">
+                    {results.map((result) => (
+                      <button
+                        className="result-row"
+                        key={result.id}
+                        onClick={() => void chooseResult(result)}
+                      >
+                        <span className="result-art">
+                          <Artwork
+                            kind={addingKind}
+                            title={result.title}
+                            image={result.image}
+                            alt=""
+                          />
+                        </span>
+                        <span className="result-copy">
+                          <strong>{result.title}</strong>
+                          <small>
+                            {addingKind === "book"
+                              ? result.authors?.join(", ")
+                              : result.subtitle}
+                            {(result.authors?.length || result.subtitle) &&
+                            result.year
+                              ? " · "
+                              : ""}
+                            {result.year}
+                          </small>
+                        </span>
+                        <span className="result-arrow">↗</span>
+                      </button>
+                    ))}
+                  </div>
+                )}
+                {!searching &&
+                  searchQuery.trim().length > 1 &&
+                  searchedQuery === searchQuery.trim() &&
+                  !error &&
+                  results.length === 0 && (
+                    <div className="no-results">
+                      <p>No matches found.</p>
+                      <small>Try another title or add it manually.</small>
+                    </div>
+                  )}
+                <button
+                  className="text-button manual-entry-button"
+                  onClick={startManualEntry}
+                >
+                  Add details manually <span aria-hidden="true">↗</span>
+                </button>
+              </>
+            )}
             {step === "entry" && editor && (
               <>
                 <button
                   className="back-link"
                   onClick={() => {
                     setEditor(null);
-                    if (addingKind) {
-                      setStep("choose");
-                      setAddingKind(null);
-                    } else closeAdd();
+                    if (addingKind) setStep("search");
+                    else closeAdd();
                   }}
                 >
                   ← Back
@@ -801,8 +985,25 @@ function App() {
               />
             </div>
             <p className="privacy-note">
-              No account or internet connection needed. Your collection stays in this browser.
+              No account or cloud sync. Your collection stays in this browser.
             </p>
+            <div className="credits">
+              <p className="eyebrow">CREDITS</p>
+              <a
+                href="https://www.themoviedb.org"
+                target="_blank"
+                rel="noreferrer"
+              >
+                <img
+                  src="https://www.themoviedb.org/assets/2/v4/logos/v2/blue_square_2-d537fb228cf3ded904ef09b136fe3fec72548ebc1fea3fbbd1ad9e36364db38b.svg"
+                  alt="TMDB"
+                />
+                <span>
+                  This product uses TMDB and the TMDB APIs but is not endorsed,
+                  certified, or otherwise approved by TMDB.
+                </span>
+              </a>
+            </div>
           </section>
         </div>
       )}
