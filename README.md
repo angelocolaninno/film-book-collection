@@ -42,7 +42,7 @@ Your personal notes and dates are stored in IndexedDB on the current browser pro
 
 ## Backup and restore
 
-Open the gear menu to export a JSON backup or import one. Import validates the file shape before changing the collection. When entries already exist, the app asks whether to merge or replace; replacement requires a second confirmation. Keep the downloaded file somewhere safe. Backups may contain private notes.
+Open the gear menu to export a JSON backup or import one. Upload an image up to 15 MB; the browser resizes it to fit the collection and caps the stored image near 1.2 MB. Uploaded covers and posters are stored with each entry in IndexedDB and included in the backup file. Import validates the file shape and embedded artwork before changing the collection. When entries already exist, the app asks whether to merge or replace; replacement requires a second confirmation. Keep the downloaded file somewhere safe. Backups may contain private notes and artwork.
 
 ## PWA and offline use
 
@@ -54,7 +54,7 @@ The included Actions workflow builds the app on pushes to `main` and deploys it 
 
 ## Data model
 
-The React UI calls `collectionRepository`; only that repository talks to IndexedDB. `CollectionItem` holds personal dates, context/format, notes, and normalized metadata. This boundary keeps persistence replaceable later without coupling UI components to a storage vendor. There is no account, remote database, or multi-user support in V1.
+The React UI calls `collectionRepository`; only that repository talks to IndexedDB. `CollectionItem` holds personal dates, context/format, notes, normalized metadata, and uploaded artwork. Artwork is resized in the browser and kept as an image data URL in the existing record, so no additional database or cloud storage is needed. JSON export/import carries that image data with the rest of each entry. There is no account, remote database, or multi-user support in V1.
 
 ## Design source
 

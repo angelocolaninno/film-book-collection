@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { ChangeEvent, FormEvent } from "react";
 import { collectionRepository } from "./repository";
+import { prepareArtwork } from "./artwork";
 import { getBookDetails, getFilmCredits, searchMedia } from "./metadata";
 import type { CollectionItem, MediaKind, SearchResult } from "./types";
 
@@ -42,6 +43,7 @@ function App() {
   const [searchedQuery, setSearchedQuery] = useState("");
   const [results, setResults] = useState<SearchResult[]>([]);
   const [searching, setSearching] = useState(false);
+  const [imageBusy, setImageBusy] = useState(false);
   const [step, setStep] = useState<"choose" | "search" | "entry">("choose");
   const [error, setError] = useState("");
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -50,6 +52,7 @@ function App() {
   const searchRun = useRef(0);
   const collectionSearchInput = useRef<HTMLInputElement>(null);
   const fileInput = useRef<HTMLInputElement>(null);
+  const artworkInput = useRef<HTMLInputElement>(null);
 
   const refresh = async () => {
     try {
@@ -242,6 +245,29 @@ function App() {
     setEditor((current) =>
       current ? { ...current, [field]: value } : current,
     );
+  const uploadArtwork = async (event: ChangeEvent<HTMLInputElement>) => {
+    const input = event.currentTarget;
+    const file = input.files?.[0];
+    const itemId = editor?.id;
+    if (!file || !itemId) return;
+    setImageBusy(true);
+    setError("");
+    try {
+      const image = await prepareArtwork(file);
+      setEditor((current) =>
+        current?.id === itemId ? { ...current, image } : current,
+      );
+    } catch (cause) {
+      setError(
+        cause instanceof Error
+          ? cause.message
+          : "This image could not be added. Try another file.",
+      );
+    } finally {
+      input.value = "";
+      setImageBusy(false);
+    }
+  };
 
   const exportData = async () => {
     try {
@@ -266,7 +292,7 @@ function App() {
       link.href = url;
       link.download = `still-collection-${today()}.json`;
       link.click();
-      URL.revokeObjectURL(url);
+      window.setTimeout(() => URL.revokeObjectURL(url), 1000);
       setToast("Backup downloaded");
     } catch {
       setToast("Could not export your collection");
@@ -860,10 +886,65 @@ function App() {
                       />
                     </label>
                   )}
-                  <label className="field-label">
-                    Artwork image URL <span className="optional">optional</span>
-                    <input type="url" placeholder="https://…" value={editor.image ?? ""} onChange={(event) => updateEditor("image", event.target.value)} />
-                  </label>
+                  <div className="artwork-upload-field">
+                    <span className="field-label-title">
+                      Cover or poster <span className="optional">optional</span>
+                    </span>
+                    <div className="artwork-upload-row">
+                      {editor.image && (
+                        <div className={`artwork-preview ${editor.kind}`}>
+                          <Artwork
+                            kind={editor.kind}
+                            title={editor.title || "Artwork preview"}
+                            image={editor.image}
+                            alt={`Preview of the ${editor.kind === "film" ? "poster" : "cover"} for ${editor.title || "this entry"}`}
+                          />
+                        </div>
+                      )}
+                      <div className="artwork-upload-controls">
+                        <input
+                          ref={artworkInput}
+                          id="artwork-file"
+                          className="artwork-file-input"
+                          type="file"
+                          accept="image/*"
+                          aria-label={`Upload ${editor.kind === "film" ? "a film poster" : "a book cover"}`}
+                          onChange={(event) => void uploadArtwork(event)}
+                        />
+                        <label
+                          className="artwork-file-button"
+                          htmlFor="artwork-file"
+                        >
+                          {imageBusy
+                            ? "Preparing image…"
+                            : editor.image
+                              ? "Replace image"
+                              : "Choose an image"}
+                        </label>
+                        <small>
+                          JPEG, PNG, WebP · up to 15 MB. Images are resized before saving.
+                        </small>
+                        {editor.image && (
+                          <button
+                            type="button"
+                            className="text-button artwork-remove-button"
+                            onClick={() => updateEditor("image", "")}
+                          >
+                            Remove image
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                    <label className="field-label artwork-url-field">
+                      Or use an image URL
+                      <input
+                        type="url"
+                        placeholder="https://…"
+                        value={editor.image?.startsWith("data:image/") ? "" : editor.image ?? ""}
+                        onChange={(event) => updateEditor("image", event.target.value)}
+                      />
+                    </label>
+                  </div>
                   <label className="field-label">
                     {editor.kind === "film" ? "Date watched" : "Date finished"}
                     <input
@@ -921,7 +1002,10 @@ function App() {
                       {error}
                     </p>
                   )}
-                  <button className="button button-dark save-button">
+                  <button
+                    className="button button-dark save-button"
+                    disabled={imageBusy}
+                  >
                     Save to my collection <span>↗</span>
                   </button>
                 </form>
@@ -961,7 +1045,7 @@ function App() {
                 <span className="choice-icon">↓</span>
                 <span>
                   <strong>Export collection</strong>
-                  <small>Download a JSON backup</small>
+                  <small>Download entries, notes, and covers as JSON</small>
                 </span>
                 <b>↗</b>
               </button>
@@ -972,7 +1056,7 @@ function App() {
                 <span className="choice-icon">↑</span>
                 <span>
                   <strong>Import a backup</strong>
-                  <small>Restore or add saved entries</small>
+                  <small>Restore entries and their covers</small>
                 </span>
                 <b>↗</b>
               </button>
@@ -1029,6 +1113,13 @@ function isCollectionItem(value: unknown): value is CollectionItem {
     "cinematographer",
     "publisher",
   ];
+  const validImage =
+    item.image === undefined ||
+    (item.image === "" ||
+      (typeof item.image === "string" &&
+      item.image.length <= 2_000_000 &&
+      (/^https?:\/\//i.test(item.image) ||
+        /^data:image\/(?:jpeg|png|webp);base64,/i.test(item.image))));
   return (
     typeof item.id === "string" &&
     item.id.length > 0 &&
@@ -1043,6 +1134,7 @@ function isCollectionItem(value: unknown): value is CollectionItem {
     optionalText.every(
       (key) => item[key] === undefined || typeof item[key] === "string",
     ) &&
+    validImage &&
     ["authors", "cast"].every(
       (key) =>
         item[key] === undefined ||

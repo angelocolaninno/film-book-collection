@@ -852,6 +852,97 @@ button {
   font-size: 11px;
   font-weight: 600;
 }
+.artwork-upload-field {
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+}
+.field-label-title {
+  color: #55584f;
+  font-size: 11px;
+  font-weight: 600;
+}
+.artwork-upload-row {
+  min-height: 126px;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 12px;
+  border: 1px solid #dfded7;
+  border-radius: 4px;
+  background: #fbfaf7;
+}
+.artwork-preview {
+  width: 76px;
+  height: 104px;
+  flex: none;
+  overflow: hidden;
+  border-radius: 3px;
+  background: #e9e7df;
+}
+.artwork-preview.book {
+  width: 74px;
+  height: 104px;
+}
+.artwork-preview .artwork {
+  width: 100%;
+  height: 100%;
+  border-radius: inherit;
+}
+.artwork-preview .artwork:before {
+  display: none;
+}
+.artwork-upload-controls {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+}
+.artwork-file-input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+.artwork-file-button {
+  min-height: 40px;
+  display: inline-flex;
+  align-items: center;
+  padding: 0 14px;
+  border: 1px solid #d8d8cf;
+  border-radius: 999px;
+  background: #f1f0ea;
+  color: var(--green);
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.artwork-file-button:hover {
+  background: #e9e9e1;
+}
+.artwork-file-input:focus-visible + .artwork-file-button {
+  outline: 2px solid var(--green);
+  outline-offset: 2px;
+}
+.artwork-upload-controls small {
+  max-width: 230px;
+  color: #85877f;
+  font-size: 10px;
+  line-height: 1.5;
+}
+.artwork-remove-button {
+  margin: -5px 0 0 -2px;
+  color: #9a5d4f;
+}
+.artwork-url-field {
+  margin-top: 3px;
+}
 .optional {
   margin-left: 4px;
   color: #969890;
